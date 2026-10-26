@@ -71,14 +71,14 @@ function CustomExercise({ visible, onClose, onCreated }: { visible: boolean; onC
     finally { setBusy(false); }
   }
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.background }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={u.page}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.background }}><ScrollView automaticallyAdjustKeyboardInsets keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" contentContainerStyle={u.page}>
       <View style={u.row}><View style={{ flex: 1 }}><Title>Make it your own</Title><Body muted>Create a movement for your library.</Body></View><IconButton label="Close custom exercise" onPress={onClose}><X size={20} color={t.text} /></IconButton></View>
       <Field label="Exercise name" value={name} onChangeText={setName} maxLength={80} placeholder="e.g. Paused goblet squat" />
       <Label>Primary muscle</Label><View style={u.wrap}>{Object.entries(MUSCLE_LABELS).map(([id, label]) => <Chip key={id} label={label} selected={id === muscle} onPress={() => setMuscle(id as MuscleGroup)} />)}</View>
       <Label>Equipment</Label><View style={u.wrap}>{EQUIPMENT.map(value => <Chip key={value} label={value} selected={value === equipment} onPress={() => setEquipment(value)} />)}</View>
       <Label>How you log it</Label><View style={u.wrap}>{([['weighted', 'Weight + reps'], ['bodyweight', 'Reps'], ['timed', 'Duration'], ['cardio', 'Time + distance']] as const).map(([id, label]) => <Chip key={id} label={label} selected={id === kind} onPress={() => setKind(id)} />)}</View>
       <Field label="Technique notes (optional)" value={instructions} onChangeText={setInstructions} maxLength={1000} multiline placeholder="Your setup, cues, or equipment details" />
-      {error ? <Body style={{ color: '#FFB4BC' }}>{error}</Body> : null}
+      {error ? <Body style={{ color: t.danger }}>{error}</Body> : null}
       <Button label={busy ? 'Saving…' : 'Create exercise'} onPress={() => void save()} disabled={busy} icon={<Check size={18} color={t.onAccent} />} />
     </ScrollView></SafeAreaView>
   </Modal>;

@@ -5,12 +5,13 @@ import { ArrowDownRight, ArrowUpRight, BookOpen, CalendarDays, Dumbbell, Heart, 
 import { useAppTheme } from '../../ThemeProvider';
 import { useTraining } from '../../data/store';
 import { EXERCISES, MUSCLE_LABELS } from '../../data/catalog';
-import { countable, exerciseHistory, exerciseRecords, formatNumber, muscleWorkload } from '../../data/analytics';
+import { countable, exerciseHistory, exerciseRecords, formatNumber } from '../../data/analytics';
 import { formatDate } from '../../data/workout';
 import { Body, Button, Card, Chip, Empty, Heading, IconButton, Label, Metric, RowLink, Screen, Title, u } from '../../components/ui';
 import { LineChart } from '../../components/charts/Charts';
-import { MuscleMap } from '../../components/charts/MuscleMap';
-import type { ExerciseKind, MuscleGroup, WorkoutSet } from '../../data/types';
+import { DetailedMusclePanel } from '../../components/charts/DetailedMusclePanel';
+import { detailedMuscleWorkload, type MuscleId } from '../../data/muscle-detail';
+import type { ExerciseKind, WorkoutSet } from '../../data/types';
 
 type PlotMetric = 'weight' | 'e1rm' | 'volume' | 'reps' | 'seconds' | 'distance';
 const METRIC_LABELS: Record<PlotMetric, string> = { weight: 'Heaviest', e1rm: 'Est. 1RM', volume: 'Volume', reps: 'Reps', seconds: 'Time', distance: 'Distance' };
@@ -19,7 +20,7 @@ export default function ExerciseProgressScreen() {
   const params = useLocalSearchParams<{ id: string }>(), id = typeof params.id === 'string' ? params.id : '';
   const { theme: t } = useAppTheme(), { state, update } = useTraining();
   const [chosenMetric, setChosenMetric] = useState<PlotMetric | null>(null), [section, setSection] = useState<'History' | 'Technique' | 'Muscles'>('History');
-  const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | null>(null);
+  const [selectedMuscle, setSelectedMuscle] = useState<MuscleId | null>(null);
   const libraryExercise = [...EXERCISES, ...state.customExercises].find(exercise => exercise.id === id);
   const history = useMemo(() => exerciseHistory(state.sessions, id), [state.sessions, id]);
   const record = useMemo(() => exerciseRecords(state.sessions, id), [state.sessions, id]);
@@ -35,7 +36,7 @@ export default function ExerciseProgressScreen() {
   const bestAtLoad = new Map<number, { reps: number; at: number }>();
   if (kind === 'weighted') for (const point of history) for (const entry of point.entries) for (const set of entry.sets) if (countable(set, kind)) { const weight = Number(set.weight), previous = bestAtLoad.get(weight); if (!previous || Number(set.reps) > previous.reps) bestAtLoad.set(weight, { reps: Number(set.reps), at: point.at }); }
   const exerciseSessions = state.sessions.map(session => ({ ...session, exercises: session.exercises.filter(entry => entry.exerciseId === id) }));
-  const work = muscleWorkload(exerciseSessions);
+  const work = detailedMuscleWorkload(exerciseSessions);
   return <Screen>
     <Heading back eyebrow={`${exercise.equipment} / ${MUSCLE_LABELS[exercise.muscle]}`} title={exercise.name} right={libraryExercise ? <IconButton label={favorite ? 'Remove exercise from favorites' : 'Favorite exercise'} onPress={() => update(draft => { draft.favoriteExerciseIds = favorite ? draft.favoriteExerciseIds.filter(item => item !== id) : [...draft.favoriteExerciseIds, id]; })}><Heart size={21} color={favorite ? t.accent : t.muted} fill={favorite ? t.accent : 'none'} /></IconButton> : undefined} />
     <Card><View style={u.row}><Trophy size={20} color={t.accent} /><Title>Your best work</Title></View>{record ? <View style={u.row}><Metric accent label={kind === 'weighted' ? 'Heaviest set' : kind === 'bodyweight' ? 'Most reps' : kind === 'timed' ? 'Longest hold' : 'Longest interval'} value={kind === 'weighted' ? `${formatNumber(record.weight)} kg` : kind === 'bodyweight' ? record.reps : kind === 'timed' ? `${formatNumber(record.seconds)} s` : `${formatNumber(record.distance)} km`} /><Metric label={kind === 'weighted' ? 'Estimated 1RM' : 'Workouts'} value={kind === 'weighted' ? record.e1rm ? `${formatNumber(record.e1rm)} kg` : '—' : record.sessionCount} /></View> : <Body muted>Complete a working set to establish your first benchmark.</Body>}</Card>
@@ -55,7 +56,7 @@ export default function ExerciseProgressScreen() {
       <Card><View style={u.row}><BookOpen size={20} color={t.accent} /><Title>Movement notes</Title></View><Body>{libraryExercise?.instructions || 'This exercise is preserved in your workout history. Add instructions to a custom exercise in your library.'}</Body></Card>
       <Card><Label>PRIMARY MUSCLE</Label><Title>{MUSCLE_LABELS[exercise.muscle]}</Title><Label>ASSISTING MUSCLES</Label><Body muted>{exercise.secondaryMuscles.length ? exercise.secondaryMuscles.map(muscle => MUSCLE_LABELS[muscle]).join(' · ') : 'No secondary groups assigned'}</Body><Label>HOW IT IS TRACKED</Label><Body muted>{kind === 'weighted' ? 'External load in kilograms and reps. Follow the movement notes for combined vs single-side dumbbell load.' : kind === 'bodyweight' ? 'Repetitions. Bodyweight is not added to lifting volume.' : kind === 'timed' ? 'Time held, in seconds.' : 'Interval duration in seconds and distance in kilometres.'}</Body></Card>
     </>}
-    {section === 'Muscles' && <Card><Title>Where this exercise contributes</Title><Body muted>All-time working sets for this movement.</Body><MuscleMap work={work} selected={selectedMuscle} onSelect={setSelectedMuscle} /><Body muted style={{ fontSize: 11 }}>Muscle involvement is approximate. This shows recorded sets, not recovery or growth.</Body></Card>}
+    {section === 'Muscles' && <><Body muted>All-time working sets for this movement.</Body><DetailedMusclePanel muscles={work} selected={selectedMuscle} onSelect={setSelectedMuscle} period="ALL TIME" /><Body muted style={{ fontSize: 11 }}>Muscle involvement is approximate. This shows recorded sets, not recovery or growth.</Body></>}
   </Screen>;
 }
 function setDescription(set: WorkoutSet, kind: ExerciseKind) { return kind === 'weighted' ? `${formatNumber(Number(set.weight))} kg × ${set.reps} reps` : kind === 'bodyweight' ? `${set.reps} reps` : kind === 'timed' ? `${set.seconds} seconds` : `${set.distance} km · ${Math.floor(Number(set.seconds) / 60)}m ${Number(set.seconds) % 60}s`; }

@@ -1,51 +1,53 @@
-import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
-import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
-import { useAppTheme } from '../../ThemeProvider';
-import { MUSCLE_LABELS } from '../../data/catalog';
-import type { MuscleGroup } from '../../data/types';
-import type { MuscleWork } from '../../data/analytics';
+import { muscleIntensity, musclePalette, muscleFill, muscleIntensityLegend } from '../../data/muscle-intensity';
+import { useEffect, useId } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import Svg, { ClipPath, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Animated, { Easing, FadeIn, interpolateColor, useAnimatedProps, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { ANATOMY, type AnatomyPiece } from '../../data/muscle-anatomy';
+import { MUSCLES, type MuscleId, type DetailedMuscleWork } from '../../data/muscle-detail';
 
-// Original schematic paths, mirrored around the body axis. Regions convey logged
-// movement attribution, not a medical anatomy model or physiological recovery.
-const front: { muscle: MuscleGroup; paths: string[] }[] = [
-  { muscle: 'chest', paths: ['M89 64 C80 59 66 58 61 64 L60 80 C67 88 81 87 89 80 Z', 'M93 64 C103 59 116 58 121 64 L122 80 C115 88 101 87 93 80 Z'] },
-  { muscle: 'shoulders', paths: ['M58 58 C46 58 42 69 42 80 L55 84 60 69 Z', 'M124 58 C136 58 140 69 140 80 L127 84 122 69 Z'] },
-  { muscle: 'biceps', paths: ['M43 84 L54 88 51 116 Q43 122 36 113 Z', 'M139 84 L128 88 131 116 Q139 122 146 113 Z'] },
-  { muscle: 'forearms', paths: ['M35 119 L48 123 38 151 32 164 23 159 Z', 'M147 119 L134 123 144 151 150 164 159 159 Z'] },
-  { muscle: 'abs', paths: ['M80 91 L89 90 89 106 79 106 Z', 'M94 90 L104 91 105 106 94 106 Z', 'M79 111 L89 111 89 127 78 126 Z', 'M94 111 L105 111 106 126 94 127 Z', 'M79 131 L89 132 89 150 Q83 147 79 142 Z', 'M94 132 L106 131 105 142 Q100 147 94 150 Z', 'M64 87 L74 92 72 135 66 129 Z', 'M118 87 L108 92 110 135 116 129 Z'] },
-  { muscle: 'quads', paths: ['M64 152 C69 145 82 151 87 159 L82 209 73 219 61 208 58 172 Z', 'M118 152 C113 145 100 151 95 159 L100 209 109 219 121 208 124 172 Z'] },
-  { muscle: 'calves', paths: ['M62 228 L77 232 74 258 68 278 58 278 56 253 Z', 'M120 228 L105 232 108 258 114 278 124 278 126 253 Z'] },
-];
-const back: { muscle: MuscleGroup; paths: string[] }[] = [
-  { muscle: 'back', paths: ['M82 47 L89 47 89 79 77 91 64 79 65 61 Z', 'M94 47 L101 47 117 61 118 79 106 91 94 79 Z', 'M62 85 L77 98 88 87 87 124 76 139 68 126 Z', 'M120 85 L105 98 95 87 96 124 107 139 114 126 Z', 'M84 129 L90 123 90 149 80 145 Z', 'M99 129 L93 123 93 149 103 145 Z'] },
-  { muscle: 'shoulders', paths: ['M58 57 C46 58 42 70 43 80 L55 84 61 68 Z', 'M124 57 C136 58 140 70 139 80 L127 84 121 68 Z'] },
-  { muscle: 'triceps', paths: ['M43 84 L55 88 51 117 42 121 35 113 Z', 'M139 84 L127 88 131 117 140 121 147 113 Z'] },
-  { muscle: 'forearms', paths: ['M35 122 L47 127 37 153 31 165 23 159 Z', 'M147 122 L135 127 145 153 151 165 159 159 Z'] },
-  { muscle: 'glutes', paths: ['M65 147 Q80 139 89 153 L89 172 Q73 183 61 168 Z', 'M118 147 Q104 139 94 153 L94 172 Q110 183 122 168 Z'] },
-  { muscle: 'hamstrings', paths: ['M60 177 Q74 189 87 180 L81 213 71 222 61 214 Z', 'M122 177 Q108 189 95 180 L101 213 111 222 121 214 Z'] },
-  { muscle: 'calves', paths: ['M62 229 Q70 223 78 230 L76 252 68 268 60 255 Z', 'M120 229 Q112 223 104 230 L106 252 114 268 122 255 Z'] },
-];
-const silhouette = 'M81 42 L80 51 C68 53 61 53 52 57 C39 62 38 77 37 89 L28 117 18 154 20 173 29 180 34 171 39 154 52 124 59 101 64 129 58 153 54 184 56 213 58 222 52 251 55 279 51 297 Q60 303 70 297 L74 275 82 253 84 227 90 191 93 191 99 227 101 253 109 275 113 297 Q123 303 131 297 L127 279 130 251 124 222 126 213 128 184 124 153 118 129 123 101 130 124 143 154 148 171 153 180 162 173 164 154 154 117 145 89 C144 77 143 62 130 57 C121 53 114 53 102 51 L101 42 Z';
-export function MuscleMap({ work, selected, onSelect }: { work: MuscleWork[]; selected: MuscleGroup | null; onSelect: (muscle: MuscleGroup) => void }) {
-  const { theme: t } = useAppTheme();
-  const [side, setSide] = useState<'front' | 'back' | 'both'>('both');
-  function fill(muscle: MuscleGroup) { const row = work.find(item => item.muscle === muscle); return row && row.direct > 0 ? t.accent : t.raised; }
-  function opacity(muscle: MuscleGroup) { const direct = work.find(item => item.muscle === muscle)?.direct ?? 0; return direct >= 10 ? 1 : direct >= 6 ? 0.75 : direct >= 3 ? 0.5 : direct > 0 ? 0.3 : 1; }
-  function drawing(which: 'front' | 'back') { return <View key={which} style={{ flex: 1, alignItems: 'center' }}><Svg viewBox="0 0 182 316" width="100%" height={side === 'both' ? 290 : 345}>
-    <Path d={silhouette} fill={t.raised + '80'} stroke={t.line} strokeWidth={1} />
-    <Ellipse cx={91} cy={25} rx={16} ry={22} fill={t.raised} stroke={t.line} strokeWidth={1} />
-    <Path d="M83 45 L99 45 101 53 81 53 Z" fill={t.raised} />
-    {(which === 'front' ? front : back).map(region => { const row = work.find(item => item.muscle === region.muscle); const assistingOnly = !row?.direct && !!row?.assisting; return <G key={region.muscle} {...{onClick: Platform.OS === 'web' ? () => onSelect(region.muscle) : undefined, onPress: Platform.OS !== 'web' ? () => onSelect(region.muscle) : undefined}} accessible={Platform.OS === 'web' ? undefined : true} accessibilityRole={Platform.OS === 'web' ? undefined : 'button'} accessibilityLabel={`${MUSCLE_LABELS[region.muscle]}: ${row?.direct ?? 0} direct sets, ${row?.assisting ?? 0} assisting sets`}>
-      {region.paths.map((path, index) => <Path key={index} d={path} fill={fill(region.muscle)} fillOpacity={opacity(region.muscle)} stroke={selected === region.muscle ? t.text : assistingOnly ? t.accent : t.line} strokeWidth={selected === region.muscle ? 2 : 1} strokeDasharray={assistingOnly ? '2 2' : undefined} strokeLinejoin="round" />)}
-    </G>; })}
-    {which === 'front' && <Circle cx={91} cy={132} r={1.5} fill={t.line} />}
-  </Svg><Text style={{ color: t.muted, fontSize: 9, letterSpacing: 2 }}>{which.toUpperCase()}</Text></View>; }
-  return <View style={{ gap: 16 }}>
-    <View style={{ flexDirection: 'row', gap: 5, padding: 4, borderRadius: 11, backgroundColor: t.raised, alignSelf: 'center' }}>{(['both', 'front', 'back'] as const).map(item => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: side === item }} onPress={() => setSide(item)} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: side === item ? t.surface : 'transparent' }}><Text style={{ color: side === item ? t.text : t.muted, fontSize: 11, fontWeight: '600' }}>{item === 'both' ? 'Overview' : item === 'front' ? 'Front' : 'Back'}</Text></Pressable>)}</View>
-    <View style={{ flexDirection: 'row', gap: 3 }}>{side !== 'back' && drawing('front')}{side !== 'front' && drawing('back')}</View>
-    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 13, flexWrap: 'wrap' }}>{[['1–2', 0.3], ['3–5', 0.5], ['6–9', 0.75], ['10+', 1]].map(([label, alpha]) => <View key={label} style={{ alignItems: 'center', gap: 5 }}><View style={{ width: 28, height: 7, borderRadius: 3, backgroundColor: t.accent, opacity: Number(alpha) }} /><Text style={{ color: t.muted, fontSize: 9 }}>{label}</Text></View>)}</View>
-    <Text style={{ color: t.muted, fontSize: 10, textAlign: 'center', lineHeight: 16 }}>Completed direct sets · outlined regions assisted{ '\n' }Tap a region or choose a muscle below.</Text>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{work.map(row => <Pressable key={row.muscle} accessibilityRole="button" accessibilityLabel={`${MUSCLE_LABELS[row.muscle]}, ${row.direct} direct, ${row.assisting} assisting sets`} accessibilityState={{ selected: selected === row.muscle }} onPress={() => onSelect(row.muscle)} style={{ paddingHorizontal: 10, paddingVertical: 9, borderRadius: 9, borderWidth: 1, borderColor: selected === row.muscle ? t.accent : t.line, backgroundColor: selected === row.muscle ? t.accent + '12' : t.raised }}><Text style={{ color: selected === row.muscle ? t.accent : t.muted, fontSize: 10 }}>{MUSCLE_LABELS[row.muscle]} <Text style={{ fontWeight: '700' }}>{row.direct}</Text></Text></Pressable>)}</View>
+export const muscleColors = { trained: musclePalette[4], unlogged: musclePalette[0], assisting: musclePalette[1], selected: '#F1E4AD' };
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+function Muscle({ piece, work, selected, onSelect, index, reduced, side, interactive }: { piece: AnatomyPiece; work?: DetailedMuscleWork; selected: boolean; onSelect: (id: MuscleId) => void; index: number; reduced: boolean; side: string; interactive: boolean }) {
+  const value = useSharedValue(0);
+  const intensity = muscleIntensity(work);
+  useEffect(() => { value.value = reduced ? intensity : withDelay(index % 12 * 18, withTiming(intensity, { duration: 650, easing: Easing.out(Easing.cubic) })); }, [intensity, value, reduced, index]);
+  const props = useAnimatedProps(() => ({ fill: interpolateColor(value.value, [0, 1, 2, 3, 4, 5], [...musclePalette]) }));
+  const name = `${MUSCLES.find(m => m.id === piece.id)?.name}: ${work?.directSets ?? 0} direct sets, ${work?.assistingSets ?? 0} assisting sets`;
+  const clip = `region-${side}-${index}`, bounds = `bounds-${side}-${index}`;
+  return <G clipPath={piece.clip ? `url(#${bounds})` : undefined}>
+    <Defs><ClipPath id={clip}><Path d={piece.d} /></ClipPath>{piece.clip ? <ClipPath id={bounds}><Rect x={piece.clip[0]} y={piece.clip[1]} width={piece.clip[2]} height={piece.clip[3]} /></ClipPath> : null}</Defs>
+    {Platform.OS === 'web'
+      ? <path d={piece.d} fill={muscleFill(work)} role={interactive ? "button" : undefined} aria-label={interactive ? name : undefined} tabIndex={interactive ? 0 : undefined} onClick={interactive ? () => onSelect(piece.id) : undefined} onKeyDown={interactive ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(piece.id); } } : undefined} style={{ cursor: interactive ? 'pointer' : 'default', transition: reduced ? 'none' : 'fill 650ms ease' }} />
+      : <AnimatedPath d={piece.d} animatedProps={props} onPress={interactive ? () => onSelect(piece.id) : undefined} accessibilityLabel={interactive ? name : undefined} />}
+    <Path d={piece.d} fill={`url(#tone-${side})`} pointerEvents="none" />
+    <G clipPath={`url(#${clip})`} pointerEvents="none"><Path d={piece.fibers} fill="none" stroke="#F4EBDD" strokeOpacity={0.24} strokeWidth={1.6} /></G>
+    <Path d={piece.d} fill="none" stroke={selected ? muscleColors.selected : '#192A22'} strokeWidth={selected ? 4 : 1.2} pointerEvents="none" />
+  </G>;
+}
+function Figure({ side, muscles, selected, onSelect, compact }: { side: 'front' | 'back'; muscles: DetailedMuscleWork[]; selected: MuscleId | null; onSelect: (id: MuscleId) => void; compact: boolean }) {
+  const reduced = useReducedMotion(), anatomy = ANATOMY[side];
+  const prefix = `${useId().replace(/:/g, '')}-${side}`;
+  return <View style={[styles.figure, compact && { paddingBottom: 0 }]}>
+    <Svg width="100%" height="100%" viewBox={side === 'front' ? '30 85 664 1285' : '754 85 664 1285'}>
+      <Defs><LinearGradient id={`tone-${prefix}`} x1="0" y1="0" x2="1" y2="0.3"><Stop offset="0" stopColor="#081C14" stopOpacity={0.35} /><Stop offset="0.35" stopColor="#FCF1DB" stopOpacity={0.17} /><Stop offset="0.65" stopColor="#FFFFFF" stopOpacity={0.03} /><Stop offset="1" stopColor="#061710" stopOpacity={0.3} /></LinearGradient></Defs>
+      <Path d={anatomy.outline} fill="#32453A" stroke="#7E8B76" strokeOpacity={0.45} strokeWidth={1.5} />
+      {anatomy.neutral.map((d, i) => <Path key={i} d={d} fill="#536357" stroke="#22352B" strokeWidth={1} />)}
+      {anatomy.pieces.map((piece, i) => <Muscle key={`${piece.id}-${i}`} piece={piece} side={prefix} interactive={!compact} work={muscles.find(m => m.id === piece.id)} selected={selected === piece.id} onSelect={onSelect} index={i} reduced={reduced} />)}
+    </Svg>
+    {!compact && <Text style={styles.side}>{side === 'front' ? 'ANTERIOR · FRONT' : 'POSTERIOR · BACK'}</Text>}
   </View>;
 }
+export function MuscleMap({ muscles, selected, onSelect, view = 'both', compact = false, compactHeight = 160 }: { muscles: DetailedMuscleWork[]; selected: MuscleId | null; onSelect: (id: MuscleId) => void; view?: 'both' | 'front' | 'back'; compact?: boolean; compactHeight?: number }) {
+  const reduced = useReducedMotion();
+  return <Animated.View key={view} entering={reduced ? undefined : FadeIn.duration(260)} style={[styles.row, { height: compact ? compactHeight : view === 'both' ? 340 : 480 }]}>{view !== 'back' && <Figure side="front" muscles={muscles} selected={selected} onSelect={onSelect} compact={compact} />}{view !== 'front' && <Figure side="back" muscles={muscles} selected={selected} onSelect={onSelect} compact={compact} />}</Animated.View>;
+}
+export function MuscleIntensityLegend({ period = 'this week' }: { period?: string }) {
+  return <View style={{ gap: 10, marginTop: 14 }}>
+    <Text style={{ color: '#DEE5D7', textAlign: 'center', fontSize: 11 }}>Completed direct sets {period}</Text>
+    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14 }}>{muscleIntensityLegend.map(bin => <View key={bin.label} style={{ alignItems: 'center', gap: 5 }}><View style={{ width: 30, height: 12, backgroundColor: bin.color, borderRadius: 3 }} /><Text style={{ color: '#DEE5D7', fontSize: 10 }}>{bin.label}</Text></View>)}</View>
+    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>{[{ label: 'Not logged', color: muscleColors.unlogged }, { label: 'Assisting only', color: muscleColors.assisting }].map(item => <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><View style={{ width: 8, height: 8, borderRadius: 3, backgroundColor: item.color }} /><Text style={{ color: '#DEE5D7', fontSize: 10 }}>{item.label}</Text></View>)}</View>
+  </View>;
+}
+const styles = StyleSheet.create({ row: { flexDirection: 'row', justifyContent: 'center', gap: 10 }, figure: { flex: 1, maxWidth: 280, paddingBottom: 18 }, side: { color: '#B3C2AA', fontSize: 9, letterSpacing: 1.4, fontWeight: '700', textAlign: 'center', marginTop: 0 } });

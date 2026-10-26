@@ -1,0 +1,39 @@
+build:
+  name: Native iPhone app for local xtool signing
+  steps:
+    - eas/checkout
+    - eas/install_node_modules
+    - eas/resolve_build_config
+    - eas/prebuild
+    - run:
+        name: Install iOS dependencies
+        working_directory: ./ios
+        command: pod install
+    - run:
+        name: Archive unsigned native release
+        command: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/Workout.xcworkspace \
+            -scheme Workout \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Workout.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            archive
+    - run:
+        name: Package IPA for xtool
+        command: |
+          set -euo pipefail
+          test -f build/Workout.xcarchive/Products/Applications/Workout.app/main.jsbundle
+          mkdir -p build/ipa/Payload
+          ditto build/Workout.xcarchive/Products/Applications/Workout.app build/ipa/Payload/Workout.app
+          cd build/ipa
+          ditto -c -k --keepParent Payload ../workout-unsigned.ipa
+    - eas/upload_artifact:
+        name: Upload unsigned iPhone app
+        inputs:
+          type: application-archive
+          path: build/workout-unsigned.ipa

@@ -1,37 +1,81 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowRight, BookOpen, CalendarDays, Check, ChevronRight, Dumbbell, Play, Plus, Target, Timer } from 'lucide-react-native';
+import { ArrowRight, ArrowUpRight, BookOpen, Check, ChevronRight, Play, Plus } from 'lucide-react-native';
 import { useAppTheme } from '../../ThemeProvider';
 import { useTraining } from '../../data/store';
 import type { Routine } from '../../data/types';
 import { durationSeconds, formatDate, formatDuration, localDate, sessionVolume } from '../../data/workout';
-import { Body, Button, Card, Empty, Heading, IconButton, Label, Metric, RowLink, Screen, Title, u } from '../../components/ui';
+import { Body, Button, Card, Heading, IconButton, Metric, Screen, Title, u } from '../../components/ui';
+import { WeeklyDial } from '../../components/WeeklyDial';
+import { MuscleMap } from '../../components/charts/MuscleMap';
+import { detailedMuscleWorkload, MUSCLES } from '../../data/muscle-detail';
 
 const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
 export default function TrainScreen() {
-  const { theme: t } = useAppTheme(); const { state, startWorkout } = useTraining();
-  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  const now = new Date(); const today = localDate(); const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7);
-  const week = Array.from({ length: 7 }, (_, i) => { const day = new Date(start); day.setDate(start.getDate() + i); return localDate(day.getTime()); });
+  const { theme: t } = useAppTheme();
+  const { state, startWorkout } = useTraining();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const now = new Date();
+  const today = localDate();
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7);
+  const week = Array.from({ length: 7 }, (_, i) => { const day = new Date(monday); day.setDate(monday.getDate() + i); return localDate(day.getTime()); });
   const sessions = [...state.sessions].sort((a, b) => b.startedAt - a.startedAt);
-  const weekly = sessions.filter(session => week.includes(localDate(session.startedAt)));
-  const dates = new Set(weekly.map(session => localDate(session.startedAt)));
-  const planned = state.routines.filter(routine => routine.weekdays.includes(now.getDay()));
-  const goal = state.profile.daysPerWeek;
+  const completedDays = new Set(sessions.filter(session => week.includes(localDate(session.startedAt))).map(session => localDate(session.startedAt)));
+  const weekStart = week[0], weekEnd = week[6];
+  const muscleWork = useMemo(() => detailedMuscleWorkload(state.sessions.filter(session => { const date = localDate(session.startedAt); return date >= weekStart && date <= weekEnd; })), [state.sessions, weekStart, weekEnd]);
+  const trainedMuscles = muscleWork.filter(muscle => muscle.directSets + muscle.assistingSets > 0).length;
+  const planned = state.routines.find(routine => routine.weekdays.includes(now.getDay()));
+  const goal = Math.max(1, state.profile.daysPerWeek);
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
+
   async function startSession(routine?: Routine) {
-    if (busy) return; setBusy(true); setError('');
-    try { await startWorkout(routine); router.push('/workout'); } catch (e) { setError(e instanceof Error ? e.message : 'Could not start. Try again.'); } finally { setBusy(false); }
+    if (busy) return;
+    setBusy(true); setError('');
+    try { await startWorkout(routine); router.push('/workout'); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start the workout. Try again.'); }
+    finally { setBusy(false); }
   }
+
   return <Screen>
-    <Heading eyebrow={`${greeting}${state.profile.name ? `, ${state.profile.name}` : ''}`} title="Make it count." subtitle={new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(now)} right={<IconButton label="Browse exercise library" onPress={() => router.push('/library')}><BookOpen size={21} color={t.text} /></IconButton>} />
-    {state.active ? <Card style={{ borderColor: t.accent, backgroundColor: t.raised }}><View style={u.row}><View style={{ flex: 1, gap: 7 }}><Label>SESSION IN PROGRESS</Label><Title>{state.active.title}</Title><Body muted>{state.active.exercises.length} exercises · {formatDuration(durationSeconds(state.active))}{state.active.pausedAt ? ' · Paused' : ''}</Body></View><Timer size={26} color={t.accent} /></View><Button label="Resume workout" onPress={() => router.push('/workout')} icon={<Play size={17} color={t.onAccent} />} /></Card> : <Card style={{ padding: 23 }}><View style={u.row}><View style={{ flex: 1, gap: 8 }}><Label>{planned.length ? 'ON YOUR SCHEDULE' : 'YOUR NEXT SESSION'}</Label><Text style={{ color: t.text, fontSize: 27, fontWeight: '700', letterSpacing: -0.7 }}>{planned[0]?.name ?? 'Show up for yourself.'}</Text><Body muted>{planned[0] ? `${planned[0].exercises.length} exercises. Your plan, ready when you are.` : 'Start fresh, or pick a routine below.'}</Body></View><Dumbbell size={31} color={t.accent} strokeWidth={1.8} /></View><Button label={busy ? 'Starting…' : planned[0] ? 'Start planned workout' : 'Start empty workout'} onPress={() => void startSession(planned[0])} disabled={busy} icon={<Play size={17} color={t.onAccent} />} />{planned[0] && <Pressable accessibilityRole="button" onPress={() => void startSession()} disabled={busy} style={{ alignItems: 'center', paddingVertical: 8 }}><Text style={{ color: t.muted, fontSize: 12 }}>Start an empty workout instead</Text></Pressable>}</Card>}
-    {error ? <Body style={{ color: '#FFB4BC' }}>{error}</Body> : null}
-    <Card><View style={[u.row, { justifyContent: 'space-between' }]}><View style={u.row}><Target size={18} color={t.accent} /><Title>This week</Title></View><Text style={{ color: t.accent, fontSize: 15, fontWeight: '700' }}>{dates.size} / {goal}</Text></View><View style={{ height: 5, backgroundColor: t.raised, borderRadius: 4 }}><View style={{ width: `${Math.min(100, dates.size / goal * 100)}%`, height: 5, borderRadius: 4, backgroundColor: t.accent }} /></View><View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>{week.map((date, i) => <View key={date} style={{ alignItems: 'center', gap: 8 }}><Text style={{ color: t.muted, fontSize: 10 }}>{dayLabels[i]}</Text><View style={{ height: 29, width: 29, borderRadius: 10, backgroundColor: dates.has(date) ? t.accent : t.raised, borderWidth: 1, borderColor: date === today ? t.accent : 'transparent', justifyContent: 'center', alignItems: 'center' }}>{dates.has(date) ? <Check size={16} color={t.onAccent} strokeWidth={2.5} /> : <Text style={{ color: date === today ? t.text : t.muted, fontSize: 10 }}>{date.slice(-2)}</Text>}</View></View>)}</View><Body muted style={{ fontSize: 12 }}>{dates.size >= goal ? 'Weekly goal reached. Make room for recovery, too.' : `${Math.max(0, goal - dates.size)} more ${goal - dates.size === 1 ? 'training day' : 'training days'} toward your weekly goal.`}</Body></Card>
-    <View style={[u.row, { justifyContent: 'space-between' }]}><Title>Your routines</Title><Pressable accessibilityRole="button" accessibilityLabel="Create routine" onPress={() => router.push('/routine/new')} style={[u.row, { gap: 5, minHeight: 40 }]}><Plus size={17} color={t.accent} /><Text style={{ color: t.accent, fontWeight: '600', fontSize: 12 }}>New</Text></Pressable></View>
-    {!state.routines.length ? <Empty title="Find your rhythm" message="Build a routine once, then bring it to every session." action={<Button label="Create your first routine" onPress={() => router.push('/routine/new')} />} /> : state.routines.map((routine, index) => <Card key={routine.id} style={{ gap: 14 }}><Pressable accessibilityRole="button" accessibilityLabel={`Edit ${routine.name}`} onPress={() => router.push({ pathname: '/routine/[id]', params: { id: routine.id } })} style={u.row}><Text style={{ color: t.accent, fontSize: 18, fontWeight: '600', minWidth: 31 }}>{String(index + 1).padStart(2, '0')}</Text><View style={{ flex: 1, gap: 5 }}><Title>{routine.name}</Title><Body muted style={{ fontSize: 12 }}>{routine.exercises.length} exercises · {routine.exercises.reduce((sum, exercise) => sum + exercise.sets, 0)} sets</Body></View><ChevronRight size={18} color={t.muted} /></Pressable>{routine.weekdays.length > 0 && <View style={u.row}><CalendarDays size={13} color={t.muted} /><Text style={{ color: t.muted, fontSize: 11 }}>{[1, 2, 3, 4, 5, 6, 0].filter(day => routine.weekdays.includes(day)).map(day => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]).join(' · ')}</Text></View>}<Button label={state.active ? 'Resume active workout' : 'Start routine'} variant="secondary" onPress={() => void startSession(routine)} disabled={busy} icon={<Play size={15} color={t.text} />} /></Card>)}
-    <View style={[u.row, { justifyContent: 'space-between' }]}><Title>Last time out</Title><Pressable accessibilityRole="button" onPress={() => router.push('/history')} style={{ padding: 10 }}><ArrowRight size={19} color={t.muted} /></Pressable></View>
-    {sessions[0] ? <Card><RowLink title={sessions[0].title} subtitle={formatDate(sessions[0].startedAt)} onPress={() => router.push({ pathname: '/session/[id]', params: { id: sessions[0].id } })} /><View style={u.row}><Metric label="Duration" value={formatDuration(durationSeconds(sessions[0]))} /><Metric label="Volume" value={`${Math.round(sessionVolume(sessions[0])).toLocaleString()} kg`} /></View></Card> : <Body muted>Your first completed workout will appear here. Every session builds your story.</Body>}
+    <Heading eyebrow={new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(now)} title="Today" subtitle={`${greeting}${state.profile.name ? `, ${state.profile.name}` : ''}.`} right={<IconButton label="Browse exercise library" onPress={() => router.push('/library')}><BookOpen size={22} color={t.accent} /></IconButton>} />
+
+    <Card style={{ padding: 22, gap: 19, borderRadius: 25, borderColor: '#152944', backgroundColor: '#152944', overflow: 'hidden' }}>
+      <View style={{ position: 'absolute', width: 260, height: 260, borderRadius: 130, borderWidth: 1, borderColor: '#FFFFFF12', right: -100, top: -95 }} />
+      <View style={[u.row, { alignItems: 'flex-start', gap: 8 }]}>
+        <View style={{ flex: 1, gap: 8, paddingTop: 5 }}>
+          <Text style={{ color: '#9BC9FA', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>{state.active ? 'IN PROGRESS' : planned ? 'TODAY’S PLAN' : 'YOUR NEXT SESSION'}</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 29, lineHeight: 34, fontWeight: '700', letterSpacing: -0.75 }}>{state.active?.title ?? planned?.name ?? 'Start a workout'}</Text>
+          <Text style={{ color: '#B9C5D5', fontSize: 13, lineHeight: 19 }}>{state.active ? `${state.active.exercises.length} exercises · ${formatDuration(durationSeconds(state.active))}${state.active.pausedAt ? ' · Paused' : ''}` : planned ? `${planned.exercises.length} exercises ready to go` : 'Your training starts here.'}</Text>
+        </View>
+        <WeeklyDial value={completedDays.size} goal={goal} dark />
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={state.active ? 'Resume workout' : planned ? 'Start workout' : 'Start empty workout'} disabled={busy} onPress={() => state.active ? router.push('/workout') : void startSession(planned)} style={({ pressed }) => ({ minHeight: 53, borderRadius: 14, paddingHorizontal: 16, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 11, opacity: busy ? 0.5 : pressed ? 0.75 : 1 })}><View style={{ width: 29, height: 29, borderRadius: 9, backgroundColor: '#EAF4FF', alignItems: 'center', justifyContent: 'center' }}><Play size={15} color="#0875E8" fill="#0875E8" /></View><Text style={{ flex: 1, color: '#182438', fontSize: 16, fontWeight: '700' }}>{state.active ? 'Resume workout' : busy ? 'Starting…' : 'Start workout'}</Text><ArrowRight size={19} color="#182438" /></Pressable>
+      {!state.active && planned && <Pressable accessibilityRole="button" disabled={busy} onPress={() => void startSession()} style={{ minHeight: 34, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#B9C5D5', fontSize: 13, fontWeight: '500' }}>Start an empty workout</Text></Pressable>}
+    </Card>
+    {!!error && <Text accessibilityRole="alert" style={{ color: '#D92D20' }}>{error}</Text>}
+
+    <View style={{ gap: 10 }}>
+      <View style={[u.row, { justifyContent: 'space-between' }]}><Title>This week</Title><Text style={{ color: t.accent, fontSize: 15, fontWeight: '600' }}>{completedDays.size} of {goal} days</Text></View>
+      <Card style={{ gap: 17 }}>
+        <View style={{ height: 5, borderRadius: 3, backgroundColor: t.raised }}><View style={{ width: `${Math.min(100, completedDays.size / goal * 100)}%`, height: 5, borderRadius: 3, backgroundColor: t.accent }} /></View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>{week.map((date, index) => <View key={date} style={{ alignItems: 'center', gap: 7, flex: 1 }}><Text style={{ color: t.muted, fontSize: 11, fontWeight: '500' }}>{dayLabels[index]}</Text><View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: completedDays.has(date) ? t.accent : date === today ? t.raised : 'transparent', alignItems: 'center', justifyContent: 'center' }}>{completedDays.has(date) ? <Check size={17} color={t.onAccent} strokeWidth={2.5} /> : <Text style={{ color: date === today ? t.text : t.muted, fontSize: 12, fontWeight: date === today ? '700' : '400' }}>{date.slice(-2)}</Text>}</View></View>)}</View>
+      </Card>
+    </View>
+
+    <Pressable accessibilityRole="button" accessibilityLabel="Open training muscle map" onPress={() => router.push('/progress?section=Muscles')} style={({ pressed }) => ({ backgroundColor: '#17251F', borderRadius: 24, padding: 18, gap: 14, opacity: pressed ? 0.8 : 1 })}>
+      <View style={[u.row, { alignItems: 'flex-start' }]}><View style={{ flex: 1, gap: 10 }}><Text style={{ color: '#B7C8AD', fontSize: 10, letterSpacing: 1.4, fontWeight: '800' }}>TRAINING THIS WEEK</Text><View><Text style={{ color: '#F4F5E9', fontSize: 29, fontWeight: '800' }}>{trainedMuscles} <Text style={{ color: '#B7C8AD', fontSize: 13 }}>/ {MUSCLES.length}</Text></Text><Text style={{ color: '#B7C8AD', fontSize: 12 }}>muscle groups</Text></View><Text style={{ color: '#DEE5D7', fontSize: 12 }}>{sessions.filter(session => week.includes(localDate(session.startedAt))).length} sessions logged</Text></View><View style={{ width: 130, height: 160 }} pointerEvents="none"><MuscleMap muscles={muscleWork} selected={null} onSelect={() => {}} compact compactHeight={160} /></View></View>
+      <View style={{ flexDirection: 'row', gap: 9 }}>{(['Push', 'Pull', 'Legs', 'Core'] as const).map(region => { const groups = MUSCLES.filter(muscle => muscle.region === region); const count = groups.filter(muscle => muscleWork.some(work => work.id === muscle.id && work.directSets + work.assistingSets > 0)).length; return <View key={region} style={{ flex: 1, gap: 5 }}><View style={{ height: 4, backgroundColor: '#485342', borderRadius: 2 }}><View style={{ width: `${count / groups.length * 100}%`, height: 4, borderRadius: 2, backgroundColor: '#8CCA9D' }} /></View><Text style={{ color: '#D3DCCB', fontSize: 10 }}>{region} <Text style={{ color: '#9DB18F' }}>{count}/{groups.length}</Text></Text></View>; })}</View>
+      <View style={[u.row, { borderTopWidth: 1, borderTopColor: '#43503E', paddingTop: 11, justifyContent: 'space-between' }]}><Text style={{ color: '#DCE7B6', fontSize: 13, fontWeight: '700' }}>Explore your body map</Text><ArrowUpRight size={18} color="#DCE7B6" /></View>
+    </Pressable>
+
+    <View style={{ gap: 10 }}>
+      <View style={[u.row, { justifyContent: 'space-between' }]}><Title>Routines</Title><Pressable accessibilityRole="button" accessibilityLabel="Create routine" onPress={() => router.push('/routine/new')} style={[u.row, { minHeight: 44, gap: 5 }]}><Plus size={17} color={t.accent} /><Text style={{ color: t.accent, fontSize: 15, fontWeight: '600' }}>New</Text></Pressable></View>
+      {state.routines.length ? <Card style={{ paddingVertical: 3, gap: 0 }}>{state.routines.map((routine, index) => <View key={routine.id} style={{ borderBottomWidth: index === state.routines.length - 1 ? 0 : 0.5, borderBottomColor: t.line, flexDirection: 'row', alignItems: 'center' }}><Pressable accessibilityRole="button" accessibilityLabel={`Edit ${routine.name}`} onPress={() => router.push({ pathname: '/routine/[id]', params: { id: routine.id } })} style={{ flex: 1, minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: t.id === 'dark' ? '#213A59' : '#EAF4FF', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: t.accent, fontSize: 12, fontWeight: '700' }}>{String(index + 1).padStart(2, '0')}</Text></View><View style={{ flex: 1, gap: 4 }}><Text style={{ color: t.text, fontSize: 16, fontWeight: '600' }}>{routine.name}</Text><Text style={{ color: t.muted, fontSize: 13 }}>{routine.exercises.length} exercises · {routine.exercises.reduce((sum, exercise) => sum + exercise.sets, 0)} sets</Text></View><ChevronRight size={17} color={t.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Start ${routine.name}`} disabled={busy} onPress={() => void startSession(routine)} style={{ width: 42, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' }}><Play size={18} color={t.accent} fill={t.accent} /></Pressable></View>)}</Card> : <Card><Body muted>Build a routine for workouts you repeat.</Body><Button label="Create routine" variant="secondary" onPress={() => router.push('/routine/new')} /></Card>}
+    </View>
+
+    {sessions[0] && <View style={{ gap: 10 }}><Title>Last workout</Title><Card><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/session/[id]', params: { id: sessions[0].id } })} style={u.row}><View style={{ flex: 1, gap: 4 }}><Text style={{ color: t.text, fontSize: 16, fontWeight: '600' }}>{sessions[0].title}</Text><Text style={{ color: t.muted, fontSize: 13 }}>{formatDate(sessions[0].startedAt)}</Text></View><ChevronRight size={18} color={t.muted} /></Pressable><View style={{ height: 0.5, backgroundColor: t.line }} /><View style={u.row}><Metric label="Duration" value={formatDuration(durationSeconds(sessions[0]))} /><Metric label="Volume" value={`${Math.round(sessionVolume(sessions[0])).toLocaleString()} kg`} /></View></Card></View>}
   </Screen>;
 }

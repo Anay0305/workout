@@ -5,9 +5,14 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.athrv47.workout",
+      "buildNumber": "3",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -34,7 +39,12 @@
       "expo-router",
       "expo-sqlite",
       "expo-sharing",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
       "react-native-health-connect",
       [
         "@sfourdrinier/react-native-ble-plx",
@@ -70,9 +80,9 @@
         }
       },
       "eas": {
-        "projectId": "f083479a-2673-4bc9-bb22-7f9affdea7ff"
+        "projectId": "66cc7a4d-22b7-4fda-8e95-7edf371c4b70"
       }
     },
-    "owner": "anay0305"
+    "owner": "athrv47"
   }
 }

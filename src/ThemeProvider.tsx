@@ -1,17 +1,19 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DEFAULT_THEME_ID, palettes, resolveThemeId, type Palette } from './theme';
+import { useColorScheme } from 'react-native';
+import { DEFAULT_THEME_ID, palettes, resolveThemeId, type AppearanceChoice, type Palette } from './theme';
 
 const preferenceKey = 'workout.palette.v1';
-type ThemeContextValue = { theme: Palette; loaded: boolean; storageError: boolean; select: (id: string) => void };
+type ThemeContextValue = { theme: Palette; appearance: AppearanceChoice; loaded: boolean; storageError: boolean; select: (id: AppearanceChoice) => void };
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [selected, setSelected] = useState(DEFAULT_THEME_ID);
+  const [selected, setSelected] = useState<AppearanceChoice>(DEFAULT_THEME_ID);
+  const systemScheme = useColorScheme();
   const [loaded, setLoaded] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const writes = useRef(Promise.resolve());
-  const latestSelection = useRef(DEFAULT_THEME_ID);
+  const latestSelection = useRef<AppearanceChoice>(DEFAULT_THEME_ID);
   useEffect(() => {
     let live = true;
     async function restore() {
@@ -20,7 +22,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         const id = resolveThemeId(saved);
         if (!live) return;
         setSelected(id); latestSelection.current = id;
-        // Preserve Ember selections under Amber; retire unsupported choices.
+        // Migrate the previous color themes to the simpler appearance setting.
         if (saved !== null && saved !== id) await AsyncStorage.setItem(preferenceKey, id);
       } catch { if (live) setStorageError(true); }
       finally { if (live) setLoaded(true); }
@@ -29,8 +31,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => { live = false; };
   }, []);
 
-  function select(id: string) {
-    if (!loaded || !palettes.some(theme => theme.id === id)) return;
+  function select(id: AppearanceChoice) {
+    if (!loaded || !['system', 'light', 'dark'].includes(id)) return;
     latestSelection.current = id;
     setSelected(id);
     // Serialize writes so rapid taps cannot restore an older choice next launch.
@@ -39,7 +41,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       catch { if (latestSelection.current === id) setStorageError(true); }
     });
   }
-  return <ThemeContext.Provider value={{ theme: palettes.find(theme => theme.id === selected)!, loaded, storageError, select }}>{children}</ThemeContext.Provider>;
+  const effective = selected === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : selected;
+  return <ThemeContext.Provider value={{ theme: palettes.find(theme => theme.id === effective)!, appearance: selected, loaded, storageError, select }}>{children}</ThemeContext.Provider>;
 }
 
 export function useAppTheme() {

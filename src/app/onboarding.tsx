@@ -1,15 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, Dumbbell, Flame, HeartPulse, Palette, ShieldCheck, Target, TrendingUp } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, Dumbbell, Flame, HeartPulse, ShieldCheck, Target, TrendingUp } from 'lucide-react-native';
 import { useAppTheme } from '../ThemeProvider';
 import { useTraining } from '../data/store';
 import type { Profile } from '../data/types';
 import { defaultDays, DAY_LABELS, EXPERIENCE_LABELS, GOAL_LABELS, suggestedRoutines } from '../data/personalize';
 import { EQUIPMENT } from '../data/catalog';
 import { localDate, uid } from '../data/workout';
-import { Appearance } from '../components/Appearance';
-import { Body, Button, Card, Chip, Field, Heading, IconButton, Label, Screen, Title, u } from '../components/ui';
+import { Body, Button, Card, Chip, Field, Heading, Label, Screen, Title, u } from '../components/ui';
 
 const steps = ['Your direction', 'Your experience', 'Your rhythm', 'Your starting point', 'Your plan'];
 export default function OnboardingScreen() {
@@ -23,7 +22,6 @@ export default function OnboardingScreen() {
   const [target, setTarget] = useState(profile.targetWeightKg?.toString() ?? '');
   const [startingWeight, setStartingWeight] = useState('');
   const [createPlan, setCreatePlan] = useState(true);
-  const [appearance, setAppearance] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const plan = suggestedRoutines(profile);
@@ -56,10 +54,8 @@ export default function OnboardingScreen() {
     finally { setBusy(false); }
   }
   return <Screen>
-    <Appearance visible={appearance} onClose={() => setAppearance(false)} />
     <View style={[u.row, { justifyContent: 'space-between' }]}>
       <Text style={{ color: t.text, fontSize: 24, fontWeight: '800', letterSpacing: -1 }}>workout.</Text>
-      <IconButton label="Choose appearance" onPress={() => setAppearance(true)}><Palette size={20} color={t.accent} /></IconButton>
     </View>
     <View style={{ gap: 12 }}>
       <View style={u.row}>{steps.map((title, index) => <View key={title} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: index <= step ? t.accent : t.raised }} />)}</View>
@@ -111,7 +107,7 @@ export default function OnboardingScreen() {
       </>}
       <Body muted>Begin with comfortable loads and adjust the template to your capacity. Your saved results will guide your next session.</Body>
     </>}
-    {!!error && <Text accessibilityRole="alert" style={{ color: '#FFB4BC', lineHeight: 21 }}>{error}</Text>}
+    {!!error && <Text accessibilityRole="alert" style={{ color: t.danger, lineHeight: 21 }}>{error}</Text>}
     <View style={{ gap: 10, marginTop: 4 }}>
       <Button label={busy ? 'Saving your setup…' : step === 4 ? editing ? 'Save profile' : 'Let’s begin' : 'Continue'} disabled={busy} onPress={() => step === 4 ? void save() : next()} icon={<ArrowRight size={18} color={t.onAccent} />} />
       {step > 0 && <Button label="Back" variant="secondary" disabled={busy} onPress={() => { setStep(value => value - 1); setError(''); }} icon={<ArrowLeft size={17} color={t.text} />} />}

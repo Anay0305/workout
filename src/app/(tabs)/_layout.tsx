@@ -1,4 +1,13 @@
-import { Tabs } from 'expo-router';
-import { Dumbbell, CalendarDays, ChartNoAxesCombined, Settings2 } from 'lucide-react-native';
+import { Tabs } from 'expo-router/js-tabs';
+import { DockTabBar } from '../../components/DockTabBar';
 import { useAppTheme } from '../../ThemeProvider';
-export default function TabLayout(){const {theme:t}=useAppTheme();return <Tabs screenOptions={{headerShown:false,tabBarActiveTintColor:t.accent,tabBarInactiveTintColor:t.muted,tabBarStyle:{backgroundColor:t.surface,borderTopColor:t.line},tabBarLabelStyle:{fontSize:10,fontWeight:'600'},sceneStyle:{backgroundColor:t.background}}}><Tabs.Screen name="index" options={{title:'Train',tabBarIcon:({color,size})=><Dumbbell color={color} size={size} strokeWidth={1.8}/>}}/><Tabs.Screen name="history" options={{title:'Journal',tabBarIcon:({color,size})=><CalendarDays color={color} size={size} strokeWidth={1.8}/>}}/><Tabs.Screen name="progress" options={{title:'Insights',tabBarIcon:({color,size})=><ChartNoAxesCombined color={color} size={size} strokeWidth={1.8}/>}}/><Tabs.Screen name="settings" options={{title:'You',tabBarIcon:({color,size})=><Settings2 color={color} size={size} strokeWidth={1.8}/>}}/></Tabs>;}
+
+export default function TabLayout() {
+  const { theme: t } = useAppTheme();
+  return <Tabs tabBar={props => <DockTabBar {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: t.background } }}>
+    <Tabs.Screen name="index" options={{ title: 'Today' }} />
+    <Tabs.Screen name="history" options={{ title: 'History' }} />
+    <Tabs.Screen name="progress" options={{ title: 'Progress' }} />
+    <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+  </Tabs>;
+}

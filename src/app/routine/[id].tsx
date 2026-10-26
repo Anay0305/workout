@@ -57,9 +57,9 @@ function RoutineEditor({ initial }: { initial?: Routine }) {
       <View style={[u.row, { justifyContent: 'space-between' }]}><Body muted style={{ fontSize: 11 }}>Position {index + 1}</Body><View style={u.row}><IconButton label={`Move ${exercise?.name ?? 'exercise'} up`} onPress={() => move(index, -1)} disabled={index === 0}><ArrowUp size={17} color={t.muted} /></IconButton><IconButton label={`Move ${exercise?.name ?? 'exercise'} down`} onPress={() => move(index, 1)} disabled={index === items.length - 1}><ArrowDown size={17} color={t.muted} /></IconButton></View></View>
     </Card>; })}
     <Button label="Add exercise" variant="secondary" onPress={() => setPicker(true)} disabled={items.length >= 30} icon={<Plus size={18} color={t.text} />} />
-    {error ? <Body style={{ color: '#FFB4BC' }}>{error}</Body> : null}
+    {error ? <Body style={{ color: t.danger }}>{error}</Body> : null}
     <Button label={busy ? 'Saving…' : 'Save routine'} onPress={() => void save()} disabled={busy} icon={<Check size={18} color={t.onAccent} />} />
-    {initial && <><Button label="Save as a new copy" variant="secondary" onPress={() => void save(true)} disabled={busy} icon={<Copy size={17} color={t.text} />} /><Button label="Delete routine" variant="danger" onPress={() => setConfirm('delete')} disabled={busy} icon={<Trash2 size={17} color="#FFB4BC" />} /></>}
+    {initial && <><Button label="Save as a new copy" variant="secondary" onPress={() => void save(true)} disabled={busy} icon={<Copy size={17} color={t.text} />} /><Button label="Delete routine" variant="danger" onPress={() => setConfirm('delete')} disabled={busy} icon={<Trash2 size={17} color={t.danger} />} /></>}
     <ExercisePicker visible={picker} onClose={() => setPicker(false)} onSelect={add} />
     <ConfirmDialog visible={confirm !== null} title={confirm === 'delete' ? 'Delete this routine?' : 'Leave without saving?'} message={confirm === 'delete' ? 'Completed workouts will remain in your history. This only removes the routine.' : 'Your unsaved routine changes will be discarded.'} confirmLabel={confirm === 'delete' ? 'Delete routine' : 'Discard changes'} busy={busy} onCancel={() => setConfirm(null)} onConfirm={() => { if (confirm === 'delete') void remove(); else { setConfirm(null); if (router.canGoBack()) router.back(); else router.replace('/'); } }} />
   </Screen>;

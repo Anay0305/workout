@@ -1,7 +1,17 @@
 {
   "cli": { "version": ">= 16.0.0", "appVersionSource": "local" },
   "build": {
-    "preview": { "distribution": "internal", "android": { "buildType": "apk" } },
-    "production": { "android": { "buildType": "app-bundle" } }
+    "preview": { "distribution": "internal", "android": { "buildType": "apk" }, "ios": { "simulator": false } },
+    "simulator": { "extends": "preview", "ios": { "simulator": true } },
+    "production": { "android": { "buildType": "app-bundle" }, "ios": { "autoIncrement": true } },
+    "xtool": {
+      "distribution": "internal",
+      "environment": "preview",
+      "ios": {
+        "withoutCredentials": true,
+        "config": "ios-xtool.yml",
+        "buildConfiguration": "Release"
+      }
+    }
   }
 }

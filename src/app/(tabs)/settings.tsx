@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Platform, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Check, Bell, Scale, CloudOff, Download, Dumbbell, Palette, RefreshCw, ShieldCheck, SlidersHorizontal, Upload, UserRound } from 'lucide-react-native';
+import { Check, Scale, CloudOff, Download, Dumbbell, Palette, RefreshCw, ShieldCheck, SlidersHorizontal, Upload, UserRound } from 'lucide-react-native';
 import { useAppTheme } from '../../ThemeProvider';
 import { useTraining } from '../../data/store';
 import type { DataState } from '../../data/types';
 import { backupJSON, parseBackup } from '../../data/validation';
-import { DAY_LABELS, EXPERIENCE_LABELS, GOAL_LABELS, suggestedRoutines } from '../../data/personalize';
+import { DAY_LABELS, GOAL_LABELS, suggestedRoutines } from '../../data/personalize';
 import { exportBackup, pickBackup } from '../../platform/backup';
 import { requestNotificationPermission } from '../../platform/notifications';
 import { Appearance } from '../../components/Appearance';
@@ -15,7 +15,7 @@ import { Body, Button, Card, Chip, Field, Heading, Label, RowLink, Screen, Title
 
 export default function SettingsScreen() {
   const { state, update, flush, replace, retry, saving, error: storageError, loadFailed } = useTraining();
-  const { theme: t } = useAppTheme();
+  const { theme: t, appearance: appearanceChoice, select: selectAppearance } = useAppTheme();
   const [appearance, setAppearance] = useState(false);
   const [rest, setRest] = useState(String(state.settings.restSeconds));
   const [reminderTime,setReminderTime]=useState(`${String(state.settings.reminderHour??18).padStart(2,'0')}:${String(state.settings.reminderMinute??0).padStart(2,'0')}`);
@@ -47,7 +47,7 @@ export default function SettingsScreen() {
   }
   async function saveReminders(enabled:boolean){
     const match=/^(\d{2}):(\d{2})$/.exec(reminderTime);if(!match||Number(match[1])>23||Number(match[2])>59){setError('Enter reminder time as HH:MM, from 00:00 to 23:59.');return;}
-    setBusy(true);setError('');setNotice('');try{if(enabled&&!await requestNotificationPermission()){setError(Platform.OS==='web'?'Training reminders are available in the installed Android app.':'Allow notifications in your device settings to enable reminders.');return;}update(d=>{d.settings.reminders=enabled;d.settings.reminderHour=Number(match[1]);d.settings.reminderMinute=Number(match[2]);});await flush();setNotice(enabled?'Training reminders follow your preferred days.':'Training reminders are off.');}catch(cause){fail(cause,'Could not save reminder settings.');}finally{setBusy(false);}
+    setBusy(true);setError('');setNotice('');try{if(enabled&&!await requestNotificationPermission()){setError(Platform.OS==='web'?'Training reminders are available in the installed iOS or Android app.':'Allow notifications in your device settings to enable reminders.');return;}update(d=>{d.settings.reminders=enabled;d.settings.reminderHour=Number(match[1]);d.settings.reminderMinute=Number(match[2]);});await flush();setNotice(enabled?'Training reminders follow your preferred days.':'Training reminders are off.');}catch(cause){fail(cause,'Could not save reminder settings.');}finally{setBusy(false);}
   }
   async function exportData() {
     if (busy) return; setBusy(true); setError(''); setNotice('');
@@ -77,17 +77,24 @@ export default function SettingsScreen() {
     <Appearance visible={appearance} onClose={() => setAppearance(false)} />
     <ConfirmDialog visible={!!pendingBackup} title="Restore this backup?" confirmLabel="Replace with backup" busy={busy} onCancel={() => setPendingBackup(null)} onConfirm={() => void restore()} message={pendingBackup ? `This replaces this device’s ${state.sessions.length} saved workouts, routines, profile, and measurements with ${pendingBackup.sessions.length} workouts, ${pendingBackup.routines.length} routines, and ${pendingBackup.measurements.length} measurements from the backup.${state.active ? ' Your current in-progress workout will be replaced too.' : ''}${pendingBackup.active ? ' The backup includes an unfinished workout you can resume.' : ''} Export your current data first if you want to keep it.` : ''} />
     <ConfirmDialog visible={regenerate} title="Rebuild your starting routines?" confirmLabel="Replace routines" busy={busy} onCancel={() => setRegenerate(false)} onConfirm={() => void rebuildPlan()} message={`Your ${state.routines.length} saved routines will be replaced with a plan for ${state.profile.daysPerWeek} days per week using your current goal, experience, and equipment. Workout history and any active workout stay unchanged. You can edit the new routines afterward.`} />
-    <Heading eyebrow="Make it yours" title="Your space." subtitle="Preferences that fit the way you train." />
+    <Heading title="Settings" />
     <Card>
-      <View style={u.row}><View style={{ width: 54, height: 54, borderRadius: 17, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: t.onAccent, fontSize: 24, fontWeight: '800' }}>{(state.profile.name || 'Y').trim().slice(0, 1).toUpperCase()}</Text></View><View style={{ flex: 1, gap: 4 }}><Title>{state.profile.name || 'Your profile'}</Title><Body muted>{GOAL_LABELS[state.profile.goal]}</Body></View></View>
-      <Body muted>{EXPERIENCE_LABELS[state.profile.experience]} · {state.profile.daysPerWeek} days per week{state.profile.preferredDays.length ? ` · ${state.profile.preferredDays.map(day => DAY_LABELS[day]).join(', ')}` : ''}</Body>
-      <Button label="Edit my profile" variant="secondary" disabled={locked} onPress={() => router.push('/onboarding?edit=1')} icon={<UserRound size={17} color={t.text} />} />
+      <View style={u.row}><View style={{ width: 50, height: 50, borderRadius: 15, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: t.onAccent, fontSize: 22, fontWeight: '700' }}>{(state.profile.name || 'Y').trim().slice(0, 1).toUpperCase()}</Text></View><View style={{ flex: 1, gap: 3 }}><Title>{state.profile.name || 'Your profile'}</Title><Body muted>{GOAL_LABELS[state.profile.goal]} · {state.profile.daysPerWeek} days a week</Body></View></View>
+      <RowLink title="Edit profile" onPress={() => router.push('/onboarding?edit=1')} icon={<UserRound size={19} color={t.accent} />} />
     </Card>
-    <Card><View style={u.row}><Bell size={20} color={t.accent}/><Title>Your weekly rhythm</Title></View><Body muted>A gentle reminder on {state.profile.preferredDays.map(day=>DAY_LABELS[day]).join(', ') || 'your chosen days'}. Change the days in your profile.</Body><Field label="Reminder time · 24-hour HH:MM" value={reminderTime} onChangeText={setReminderTime} maxLength={5} placeholder="18:00"/><View style={u.row}><View style={{flex:1}}><Body>Training reminders</Body><Body muted>{state.settings.reminders?'On for your chosen days':'Off'}</Body></View><Switch accessibilityLabel="Training reminders" value={!!state.settings.reminders} disabled={busy} onValueChange={enabled=>void saveReminders(enabled)} trackColor={{false:t.line,true:t.accent}} thumbColor={state.settings.reminders?t.onAccent:t.muted}/></View><Button label="Save reminder time" variant="secondary" disabled={busy} onPress={()=>void saveReminders(!!state.settings.reminders)}/></Card>
-    <Card><RowLink title="Cult scale & body data" subtitle="Connect your scale or import shared measurements" onPress={() => router.push('/scale')} icon={<Scale size={22} color={t.accent} />} /></Card>
-    <View style={{ gap: 12 }}><Label>Look & feel</Label><Card>
-      <RowLink title="Appearance" subtitle={`${t.name} · Dark mode`} onPress={() => setAppearance(true)} icon={<Palette size={22} color={t.accent} />} />
-      <Toggle title="Haptic feedback" description="A subtle tap when you complete a set." value={state.settings.haptics} disabled={locked} onChange={value => update(draft => { draft.settings.haptics = value; })} />
+    <View style={{ gap: 10 }}><Label>GENERAL</Label><Card style={{ gap: 0 }}>
+      <Toggle title="Light mode" description="Use the bright appearance" value={t.id === 'light'} onChange={enabled => selectAppearance(enabled ? 'light' : 'dark')} />
+      <View style={{ height: 0.5, backgroundColor: t.line }} />
+      <RowLink title="Appearance" subtitle={appearanceChoice === 'system' ? 'Automatic' : t.name} onPress={() => setAppearance(true)} icon={<Palette size={20} color={t.accent} />} />
+      <View style={{ height: 0.5, backgroundColor: t.line }} />
+      <RowLink title={Platform.OS === 'ios' ? 'Scale & body data' : 'Cult scale & body data'} onPress={() => router.push('/scale')} icon={<Scale size={20} color={t.accent} />} />
+      <View style={{ height: 0.5, backgroundColor: t.line }} />
+      <Toggle title="Haptic feedback" description="Tap feedback when you complete a set" value={state.settings.haptics} disabled={locked} onChange={value => update(draft => { draft.settings.haptics = value; })} />
+    </Card></View>
+    <View style={{ gap: 10 }}><Label>REMINDERS</Label><Card>
+      <Toggle title="Training reminders" description={state.profile.preferredDays.map(day => DAY_LABELS[day]).join(', ') || 'Your chosen days'} value={!!state.settings.reminders} disabled={busy} onChange={enabled => void saveReminders(enabled)} />
+      <Field label="Time · 24-hour HH:MM" value={reminderTime} onChangeText={setReminderTime} maxLength={5} placeholder="18:00" />
+      <Button label="Save reminder time" variant="secondary" disabled={busy} onPress={() => void saveReminders(!!state.settings.reminders)} />
     </Card></View>
     <View style={{ gap: 12 }}><Label>During your workout</Label><Card>
       <View style={u.row}><SlidersHorizontal size={22} color={t.accent} /><Title>Rest & focus</Title></View>
@@ -110,7 +117,7 @@ export default function SettingsScreen() {
       <Button label={busy ? 'Please wait…' : 'Export backup'} variant="secondary" disabled={locked} onPress={() => void exportData()} icon={<Download size={18} color={t.text} />} />
       <Button label="Restore backup" variant="secondary" disabled={busy} onPress={() => void importData()} icon={<Upload size={18} color={t.text} />} />
     </Card></View>
-    {(!!error || !!storageError) && <Card><Text accessibilityRole="alert" style={{ color: '#FFB4BC', lineHeight: 21 }}>{error || storageError}</Text>{!!storageError && <Button label="Retry saving" variant="secondary" disabled={busy} onPress={() => { void retry().catch(cause => fail(cause, 'Saving is still unavailable.')); }} />}</Card>}
+    {(!!error || !!storageError) && <Card><Text accessibilityRole="alert" style={{ color: t.danger, lineHeight: 21 }}>{error || storageError}</Text>{!!storageError && <Button label="Retry saving" variant="secondary" disabled={busy} onPress={() => { void retry().catch(cause => fail(cause, 'Saving is still unavailable.')); }} />}</Card>}
     {!!notice && <View style={[u.row, { alignItems: 'flex-start' }]}><Check size={18} color={t.accent} /><Body style={{ flex: 1 }}>{notice}</Body></View>}
     <View style={{ alignItems: 'center', gap: 8, paddingVertical: 12 }}><ShieldCheck color={t.muted} size={21} /><Body muted>{saving ? 'Saving changes…' : 'Your training is private by default.'}</Body><Text style={{ color: t.muted, fontSize: 11 }}>workout. · Local-first training journal</Text></View>
   </Screen>;

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Workout",
     "slug": "workout",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -29,7 +29,8 @@
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -80,9 +81,9 @@
         }
       },
       "eas": {
-        "projectId": "66cc7a4d-22b7-4fda-8e95-7edf371c4b70"
+        "projectId": "f083479a-2673-4bc9-bb22-7f9affdea7ff"
       }
     },
-    "owner": "athrv47"
+    "owner": "anay0305"
   }
 }
